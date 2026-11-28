@@ -1,5 +1,5 @@
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 ctx.lineCap = "round";
 ctx.lineJoin = "round";
@@ -16,9 +16,30 @@ let isDrawing = false;
 let currentTool = "draw";
 let currentColor = color.value;
 let currentSize = size.value;
+let undoStack = [];
 
 ctx.strokeStyle = currentColor;
 ctx.lineWidth = currentSize;
+
+function setActiveButton(activeBtn) {
+    [draw, erase, stamp].forEach(function (btn) {
+        btn.classList.remove("active");
+    });
+    activeBtn.classList.add("active");
+}
+
+function saveSnapshot() {
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    undoStack.push(snapshot);
+}
+
+function drawStamp(x, y) {
+    ctx.font = currentSize * 4 + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = currentColor;
+    ctx.fillText("★", x, y);
+}
 
 color.addEventListener("input", function (event) {
     currentColor = event.target.value;
@@ -31,29 +52,36 @@ size.addEventListener("input", function (event) {
 });
 
 draw.addEventListener("click", function () {
+    ctx.globalCompositeOperation = 'source-over';
     currentTool = "draw";
-    console.log("tool:", currentTool);
+    setActiveButton(draw);
 });
 
 erase.addEventListener("click", function () {
+    ctx.globalCompositeOperation = 'destination-out';
     currentTool = "erase";
-    console.log("tool:", currentTool);
-});
-
-undo.addEventListener("click", function () {
-    console.log("draw:", currentTool);
+    setActiveButton(erase);
 });
 
 clean.addEventListener("click", function () {
-    console.log("tool:", currentTool);
+    saveSnapshot();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
 });
 
 stamp.addEventListener("click", function () {
+    ctx.globalCompositeOperation = 'source-over';
     currentTool = "stamp";
-    console.log("tool:", currentTool);
+    setActiveButton(stamp);
 });
 
 canvas.addEventListener("mousedown", function (event) {
+    if (currentTool === "stamp") {
+        saveSnapshot();
+        drawStamp(event.offsetX, event.offsetY);
+        return;
+    }
+    saveSnapshot();
     isDrawing = true;
     ctx.beginPath();
     ctx.moveTo(event.offsetX, event.offsetY);
@@ -73,4 +101,11 @@ canvas.addEventListener("mouseup", () => {
 canvas.addEventListener("mouseleave", () => {
     isDrawing = false;
     ctx.beginPath();
+});
+
+undo.addEventListener("click", function () {
+    if (undoStack.length > 0) {
+        const prev = undoStack.pop();
+        ctx.putImageData(prev, 0, 0);
+    }
 });
